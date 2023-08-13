@@ -1,0 +1,75 @@
+version: "3.7"
+services:
+  zookeeper:
+    image: "docker.io/bitnami/zookeeper:3-debian-10"
+    networks:
+      - gymnetwork
+    ports:
+      - "2181:2181"
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka:
+    image: "bitnami/kafka:latest"
+    container_name: kafka_service
+    ports:
+      - "9094:9094"
+    depends_on:
+      - zookeeper
+    environment:
+      - KAFKA_BROKER_ID=23
+      # - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092
+      # - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092
+      - KAFKA_CFG_ZOOKEEPER_CONNECT=zookeeper:2181
+      - KAFKA_ADVERTISED_HOST_NAME=kafka-internal.io
+
+      # Permite que o kafka comunique sem criptografia. NÃO RECOMENDADO PARA PRODUÇÃO!!!
+      - ALLOW_PLAINTEXT_LISTENER=yes
+
+      # DEFINE OS PROTOCOLOS ATRAVÉS DE METADADOS EXEMPLO:
+      # EXTERNAL:SASL_PLAINTEXT  significa que o metadado EXTERNAL vai usar o protocolo SASL_PLAINTEXT
+      # ou seja, com autenticação SASL sem criptografia tsl.
+      # Já o PLAINTEXT é um metadado que tem o mesmo nome do seu protocolo é não apresenta nhenuma segurança de.
+      # autenticação e criptografia.
+      - KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=PLAINTEXT:PLAINTEXT,EXTERNAL:SASL_PLAINTEXT
+
+      # MAPEIA AS PORTAS DO BROCKER DO KAFKA
+      # perceba que o  external está mapeado para porta 9094, lembrese de espelhar a porta para 9094 para ter acesso no SO.
+      - KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,EXTERNAL://:9094
+
+      # MAPEIA OS ENDEREÇOS, onde no primeiro vai ser usado para comunicação interna, e o segundo para comunicação esterna
+      # Perceba que ele utiliza os metadados criados acima
+      - KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://kafka_service:9092,EXTERNAL://localhost:9094
+
+      # Habilita para que use SASL sem criptografia
+      - KAFKA_CFG_SASL_MECHANISM_CONTROLLER_PROTOCOL=PLAIN
+
+      # Define qual metadado criado vai ser o Client.
+      - KAFKA_CLIENT_LISTENER_NAME=EXTERNAL
+
+      # Credenciais do kafka
+      - KAFKA_CLIENT_USERS=USER_FROM_KAFKA
+      - KAFKA_CLIENT_PASSWORDS=MUST_BE_STRONG_A_PASSWORD
+    networks:
+      - gymnetwork
+
+  kafka_manager:
+    container_name: kafka_manager
+    image: provectuslabs/kafka-ui:latest
+
+    ports:
+      - 8080:8080
+
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka_service:9092
+
+    depends_on:
+      - kafka
+
+    networks:
+      - gymnetwork
+
+networks:
+  gymnetwork:
+    driver: bridge
